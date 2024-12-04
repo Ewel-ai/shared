@@ -34,7 +34,9 @@ METHOD return_structured_data. "e_t_result IS exporting parameter type table of 
 
 IF ls_stuctured_line-restbudget < 0.
 ls_stuctured_line-restbudget-restbudget = 0.
-ENDIF.
+APPEND ls_stuctured_line-restbudget TO e_t_result.
+APPEND ls_stuctured_line-assigned TO e_t_result.
+ELSE.
 APPEND ls_stuctured_line-restbudget TO e_t_result.
 APPEND ls_stuctured_line-assigned TO e_t_result.
       
