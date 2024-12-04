@@ -1,0 +1,47 @@
+METHOD return_structured_data. "e_t_result IS exporting parameter type table of out desired structure
+    DATA: ls_stuctured_line TYPE ybwst_str_projitm.
+
+
+    LOOP AT gt_final ASSIGNING FIELD-SYMBOL(<lfs_final_line>).
+
+      MOVE-CORRESPONDING <lfs_final_line> TO ls_stuctured_line.
+
+**      "Assigned = Purchase req + PO Commitment + Actual
+**      ls_stuctured_line-assigned = <lfs_final_line>-po_wertv8_24 + <lfs_final_line>-po_whgbtr_27 + <lfs_final_line>-act_wkgbtr_28.
+*      "Assigned = Purchase req Commitment + PO Commitment + Actual
+*      ls_stuctured_line-assigned = <lfs_final_line>-pr_whgbtr_26 + <lfs_final_line>-po_whgbtr_27 + <lfs_final_line>-act_wkgbtr_28.
+      "EUR - Global Currency assumption
+      ls_stuctured_line-waers = 'EUR'.
+      "Restbudget = Auftragbudget (not additive) -Bestellobligo (sum for the order) - Ist Gesamt (sum for the order)
+*      READ TABLE e_t_result WITH KEY pspid_4 = <lfs_final_line>-pspid_4 ASSIGNING FIELD-SYMBOL(<lfs_existing_data>).
+
+***************************************************************************************************************************************************************************************************************
+*   Feld Assigned is a sum of Purchase req Commitment,  PO Commitment, Actual for PO orders that are part of "main order".
+* "Restbudget" = "main order" budget (not additive, take a value that is a value of main order no matter how many times is displayed in lines below) - PO commitment (is a sum for PO order commitment that are part of "main order") - POactual (is a sum for PO order that are part of "main order").
+*   dodac zalozenie:  If(restbudget<0; 0; restbudget) 
+******************************************************************************************************************************************************************************************************************
+
+      READ TABLE e_t_result WITH KEY aufnr_1_8 = <lfs_final_line>-aufnr_1_8 ASSIGNING FIELD-SYMBOL(<lfs_existing_data>).
+      IF sy-subrc = 0.
+        <lfs_existing_data>-restbudget = <lfs_existing_data>-restbudget - <lfs_final_line>-pr_whgbtr_26 - <lfs_final_line>-po_whgbtr_27 - <lfs_final_line>-act_wkgbtr_28.
+
+      "Assigned = Purchase req Commitment + PO Commitment + Actual
+      ls_stuctured_line-assigned = <lfs_final_line>-pr_whgbtr_26 + <lfs_final_line>-po_whgbtr_27 + <lfs_final_line>-act_wkgbtr_28.
+      ELSE.
+        "ls_stuctured_line-restbudget = <lfs_final_line>-wtges_1_37 - <lfs_final_line>-po_whgbtr_27 - <lfs_final_line>-act_wkgbtr_28.
+        " which order? yst_ordbud or user4_23
+        ls_stuctured_line-restbudget = <lfs_final_line>-user4_23 - <lfs_final_line>-pr_whgbtr_26 - <lfs_final_line>-po_whgbtr_27 - <lfs_final_line>-act_wkgbtr_28.
+
+IF ls_stuctured_line-restbudget < 0.
+ls_stuctured_line-restbudget-restbudget = 0.
+ENDIF.
+APPEND ls_stuctured_line-restbudget TO e_t_result.
+APPEND ls_stuctured_line-assigned TO e_t_result.
+      
+
+    ENDIF.
+
+
+    ENDLOOP.
+
+  ENDMETHOD.
