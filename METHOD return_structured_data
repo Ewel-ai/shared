@@ -47,3 +47,75 @@ APPEND ls_stuctured_line-assigned TO e_t_result.
     ENDLOOP.
 
   ENDMETHOD.
+
+
+
+
+
+***************************************************************************************************************************************************************************************************************************
+nowa wersja kodu:
+*********************************************************************************************************************************************************************************************************************************
+
+METHOD return_structured_data. "e_t_result IS exporting parameter type table of out desired structure
+
+ DATA: ls_stuctured_line TYPE ybwst_str_projitm.
+
+ LOOP AT gt_final ASSIGNING FIELD-SYMBOL(<lfs_final_line>).
+
+ MOVE-CORRESPONDING <lfs_final_line> TO ls_stuctured_line.
+
+** "Assigned = Purchase req + PO Commitment + Actual
+** ls_stuctured_line-assigned = <lfs_final_line>-po_wertv8_24 + <lfs_final_line>-po_whgbtr_27 + <lfs_final_line>-act_wkgbtr_28.
+* "Assigned = Purchase req Commitment + PO Commitment + Actual
+* ls_stuctured_line-assigned = <lfs_final_line>-pr_whgbtr_26 + <lfs_final_line>-po_whgbtr_27 + <lfs_final_line>-act_wkgbtr_28.
+ "EUR - Global Currency assumption
+ ls_stuctured_line-waers = 'EUR'.
+ "Restbudget = Auftragbudget (not additive) -Bestellobligo (sum for the order) - Ist Gesamt (sum for the order)
+* READ TABLE e_t_result WITH KEY pspid_4 = <lfs_final_line>-pspid_4 ASSIGNING FIELD-SYMBOL(<lfs_existing_data>).
+
+***************************************************************************************************************************************************************************************************************
+* Feld Assigned is a sum of Purchase req Commitment, PO Commitment, Actual for PO orders that are part of "main order".
+* "Restbudget" = "main order" budget (not additive, take a value that is a value of main order no matter how many times is displayed in lines below) - PO commitment (is a sum for PO order commitment that are part of "main order") - POactual (is a sum
+* for po order that are part of "main order").
+* dodac zalozenie: If(restbudget<0; 0; restbudget)
+******************************************************************************************************************************************************************************************************************
+ "Assigned as per requirement (if the field names are correct)
+ ls_stuctured_line-assigned = <lfs_final_line>-pr_whgbtr_26 + <lfs_final_line>-po_whgbtr_27 + <lfs_final_line>-act_wkgbtr_28.
+
+ "Sprawdz czy dany aufnr_1_8 jest już w naszej output tabeli (READ TABLE zawsze zwraca jedenm pierwszy wiersz, dlatego do wywaliłem, bo może być kilka linii.
+ "wcześniej było ok, bo edytowaliśmy wartości tylko w tym pierwszym wierszu. Jak chcesz edytować wartości w kilku wierszach z tym samym aufnr, użyj LOOP AT... WHERE...
+ "przykład niżej
+ "READ TABLE e_t_result WITH KEY aufnr_1_8 = <lfs_final_line>-aufnr_1_8 ASSIGNING FIELD-SYMBOL(<lfs_existing_data>).
+
+ "tutaj muszą być dobre pola poodejmowane dla poszczególnej linii, aktualnej. Tutaj jak chcemy coś wpisać w polu restbudget to wypełniamy i tak to pole dla
+ "ls_structured_line. Możesz się odwołać tylko do pól w aktualnym wierszu w gt_final - jeśli potrzebujemy coś z wcześniej przetwarzanych linii, to trzeba
+ "pomyśleć jak to zrobić inaczej
+ ls_stuctured_line-restbudget = <lfs_final_line>-user4_23 - <lfs_final_line>-pr_whgbtr_26 - <lfs_final_line>-po_whgbtr_27 - <lfs_final_line>-act_wkgbtr_28.
+
+ "Loop o którym pisałem wcześniej. MINUS: jest to mało optymalne i spowolni program. Jeśli np. wartości będą takie same dla jedego poszczególnego AUFNR, można pomyśleć
+ "nad wewnętrzną tabelą typu, która będzie miała strukturę linii AUFNR, RESTBUDGET i tam byśmy sobie to wpisywali wszytsko a pod koniec sczytywali binarnie
+ "wtedy będzie szybciej.
+ "Z loopem program znajduje nam każdą wcześniej zappendowaną linię w e_t_results z takim samym AUFNR jak aktualnie przetwarzana no i zapisuje ją w
+ "<lfs_existing_data>, no i tą strukturą możesz się do tych linii odwołać (np. jak w poprzedniej linii chcesz coś odjąć z aktualnie przrtwarzanego wiersza)
+ LOOP AT e_t_result ASSIGNING FIELD-SYMBOL(<lfs_existing_data>) WHERE aufnr_1_8 = <lfs_final_line>-aufnr_1_8.
+ <lfs_existing_data>-restbudget = <lfs_existing_data>-restbudget - <lfs_final_line>-pr_whgbtr_26 - <lfs_final_line>-po_whgbtr_27 - <lfs_final_line>-act_wkgbtr_28.
+ "tutaj też sprawdz czy budzet nie spadl ponizej 0.
+ IF <lfs_existing_data>-restbudget < 0.
+ <lfs_existing_data>-restbudget-restbudget = 0.
+ ENDIF.
+ ENDLOOP.
+
+ "To powinno być na końcu, przed samym appendem
+ IF ls_stuctured_line-restbudget < 0.
+ ls_stuctured_line-restbudget-restbudget = 0.
+ ENDIF.
+ APPEND ls_stuctured_line TO e_t_result.
+ "Tak jak poniżej - nie można. RESTBUDGET to jest jedno pole a e_t_result to tabela, która ma wiele kolumn. Trzeba załączyć coś, co jest jedną linią, ale ma
+ "strukturę taką jak ta tabela, czyli appendować musisz całe ls_structured_line.
+ "APPEND ls_stuctured_line-restbudget TO e_t_result.
+ "APPEND ls_stuctured_line-assigned TO e_t_result.
+ "APPEND ls_stuctured_line-restbudget TO e_t_result.
+ "APPEND ls_stuctured_line-assigned TO e_t_result.
+
+ ENDLOOP.
+ENDMETHOD.
