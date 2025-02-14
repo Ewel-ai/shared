@@ -177,7 +177,8 @@ FUNCTION y_bwst_ps_budgetcntl.
 "Projekt zostaje w ProjectId - kolumna tylko na nr projektów (projekt powielony na każdą linię tabeli z jego hierrachii), 
 "WBS (1 poziom, a 2 poziom powielony dla wszystkich zamówień pod nim - zamówienia podlegają pod 2 poziom wbs), 
 "Wszystkie zamówienia
-"Na ten moment wszystkie kolumny zostają
+"czyli powielenie Projektów i WBS dla wszystkich zamówień, ale tam gdzie nie ma zamówień, to są "globalne wartości" na projekt czy WBS, więc też muszą zsotać
+"Na ten moment wszystkie kolumny wartościowe też zostają
 ****************************************************************************************************
 ******      ""MODIFIKATIONSBEREICH, neue Spalten
 ******      IF lv_level > 0.
