@@ -1,0 +1,286 @@
+FUNCTION y_bwst_ps_budgetcntl.
+
+*"----------------------------------------------------------------------
+*"*"Local Interface:
+*"  IMPORTING
+*"     VALUE(I_ISOURCE) TYPE  SBIWA_S_INTERFACE-ISOURCE OPTIONAL
+*"     VALUE(I_REQUNR) TYPE  SBIWA_S_INTERFACE-REQUNR OPTIONAL
+*"     VALUE(I_MAXSIZE) TYPE  SBIWA_S_INTERFACE-MAXSIZE DEFAULT 1000
+*"     VALUE(I_INITFLAG) TYPE  SBIWA_S_INTERFACE-INITFLAG OPTIONAL
+*"     VALUE(I_UPDMODE) TYPE  SBIWA_S_INTERFACE-UPDMODE OPTIONAL
+*"     VALUE(I_DATAPAKID) TYPE  SBIWA_S_INTERFACE-DATAPAKID DEFAULT
+*"       50000
+*"     VALUE(I_READ_ONLY) TYPE  SBIW_BOOL DEFAULT SBIW_C_FALSE
+*"  TABLES
+*"      I_T_SELECT TYPE  SBIWA_T_SELECT OPTIONAL
+*"      I_T_FIELDS TYPE  SBIWA_T_FIELDS OPTIONAL
+*"      E_T_DATA STRUCTURE  YBWST_STR_BUDGETCNTL OPTIONAL
+*"  EXCEPTIONS
+*"      NO_MORE_DATA
+*"      ERROR_PASSED_TO_MESS_HANDLER
+*"----------------------------------------------------------------------
+
+  DATA: itab_list  TYPE TABLE OF abaplist,
+        g_t_status LIKE syst,
+        lv_bukrs   TYPE ps_pbukr, "i, "płaska pojedyncza zmienna
+        lr_pspid   TYPE RANGE OF ps_pspid,
+        lr_posid   TYPE RANGE OF ps_posid,
+        lr_aufnr   TYPE RANGE OF aufnr,
+        lv_version TYPE bp_versn,
+        ls_final   TYPE ybwst_str_budgetcntl,
+        "lt_final   TYPE STANDARD TABLE OF ybwst_str_budgetcntl,
+        lv_level   TYPE i,
+        lv_message TYPE string.
+  "rspar      TYPE TABLE OF rsparams.
+*        lv_timestamp TYPE string. "LADINGDATUM
+
+  TYPES: BEGIN OF lty_hierarchy_wbs,
+           object TYPE char24,
+           level  TYPE i,
+         END OF lty_hierarchy_wbs.
+
+  DATA: lt_hierarchy_wbs TYPE TABLE OF lty_hierarchy_wbs.
+
+
+  STATICS: lt_final_data TYPE TABLE OF ybwst_str_budgetcntl. "Static variable used to remember selected data with every execution
+
+  "Datenaufbereitung und Datenformatierung, Ausführung des Extraktors
+  IF i_initflag = abap_true.
+
+
+    "Parametern für die Auswahl, zum Selektionsbild des Programms übergehen
+    LOOP AT i_t_select[] INTO DATA(ls_selection).
+
+      CASE ls_selection-fieldnm.
+        WHEN 'PBUKR_2'.
+          lv_bukrs = ls_selection-low.  "EQ p_pbukr.
+
+*        WHEN 'POSID_6'.
+*          APPEND VALUE #( sign = ls_selection-sign
+*                          option = ls_selection-option
+*                          low = ls_selection-low
+*                          high = ls_selection-high ) TO lr_posid.
+        WHEN 'PROJEKT_ID'.
+          APPEND VALUE #( sign = ls_selection-sign
+                          option = ls_selection-option
+                          low = ls_selection-low
+                          high = ls_selection-high ) TO lr_pspid.
+
+*        WHEN 'AUFNR_1_8'.
+*          APPEND VALUE #( sign = ls_selection-sign
+*                          option = ls_selection-option
+*                          low = ls_selection-low
+*                          high = ls_selection-high ) TO lr_aufnr.
+*        WHEN 'YEAR_CALC'.
+*          APPEND VALUE #( sign = ls_selection-sign
+*                          option = ls_selection-option
+*                          low = ls_selection-low
+*                          high = ls_selection-high ) TO lr_year_calc.
+        WHEN 'VERSION'.
+          lv_version = ls_selection-low.
+
+      ENDCASE.
+
+
+
+    ENDLOOP.
+
+
+**************************************************************************************************************************************************************************************
+    SUBMIT ypsst_budgetcontrol  WITH p_pbukr EQ lv_bukrs  "EQ '2333'"in lr_bukrs
+                               WITH s_pspid IN lr_pspid "EQ 'J8II-004712'
+                              " WITH s_posid IN lr_posid "WBS
+                              " WITH s_aufnr IN lr_aufnr
+                               WITH p_versn EQ lv_version    "EQ '000'
+                               WITH p_layout = '/STANDARD'  "layout variant
+                               WITH p_list EQ 'X'
+                               EXPORTING LIST TO MEMORY
+                               AND RETURN.
+
+
+
+    "Extraktion der Daten des aufgerufenen Programms
+    CALL FUNCTION 'LIST_FROM_MEMORY'
+      TABLES
+        listobject = itab_list
+      EXCEPTIONS
+        not_found  = 1
+        OTHERS     = 2.
+    IF sy-subrc <> 0.
+      CONCATENATE sy-msgid sy-msgno sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4
+      INTO lv_message SEPARATED BY space.
+    ENDIF.
+
+    DATA: lt_ascii TYPE list_string_table.
+
+    "Konvertiert die gelieferte Liste nach ASCI. Dabei wird der reine Textteil der Liste ohne Attribute Zeile für Zeile in die vorbereitete interne Tabelle (LISTASCI) kopiert
+    CALL FUNCTION 'LIST_TO_ASCI'
+      EXPORTING
+        list_index        = -1
+      IMPORTING
+        list_string_ascii = lt_ascii
+      TABLES
+        listobject        = itab_list.
+
+    DELETE lt_ascii INDEX lines( lt_ascii ).
+
+
+    "FIELD-SYMBOL zeigt auf eine Tabellenzeile
+    LOOP AT lt_ascii ASSIGNING FIELD-SYMBOL(<lfs_ascii>) FROM 4. "ab Zeile 4 starten, um die Listenüberschrift wegzulassen
+
+      SPLIT <lfs_ascii>+1 AT '|' INTO TABLE DATA(lt_splitted_data). "teilen die Zeile nach dem '|'-Zeichen in Spalten auf, dann schreiben die einzelnen SPALTEN in die WÄHLER der Tabelle
+      "Löschen die ersten 3 unnötigen Zeilen
+      DELETE lt_splitted_data FROM 1 TO 3.
+
+      LOOP AT lt_splitted_data ASSIGNING FIELD-SYMBOL(<lfs_value>).
+        DATA(lv_column_index) = sy-tabix.
+
+        "logika splaszczenia hierarchii - potwierdzic z Marcelem
+        " IF lv_column_index = '4'. "przed wywaleniem 3 pierwszych kolumn
+        IF lv_column_index = '1'.
+          "pętla DO by spłaszczeć hierarchię
+          "Project:              gv_pspid  TYPE proj-pspid,
+          "WBS-element z hierarchią:         gv_posid  TYPE prps-posid,
+          "Order:                          gv_aufnr  TYPE aufk-aufnr,
+          lv_level = 0.
+          DO.
+            IF <lfs_value>(1) = '.'.
+              lv_level = lv_level + 1.
+              <lfs_value> = <lfs_value>+1.
+            ELSE.
+              APPEND VALUE #( object = <lfs_value> level = lv_level ) TO lt_hierarchy_wbs.
+              EXIT.
+            ENDIF.
+          ENDDO.
+
+        ENDIF.
+
+
+        ASSIGN COMPONENT lv_column_index OF STRUCTURE ls_final TO FIELD-SYMBOL(<lfs_structure_field>). "Mapping mit Struktur
+
+        "Schreiben eines Wertes in ein Feld aus einer Struktur. Behebung von Fehlern, die durch Zahlen verursacht werden (Punkt, Komma)
+        CONDENSE <lfs_value>. "NO-GAPS?
+        TRY.
+            <lfs_structure_field> = CONV #( <lfs_value> ).
+          CATCH cx_sy_conversion_no_number.
+            REPLACE ALL OCCURRENCES OF '.' IN <lfs_value> WITH ''.
+            REPLACE ALL OCCURRENCES OF ',' IN <lfs_value> WITH '.'.
+            "IF sy-subrc = 0.
+            <lfs_structure_field> = CONV #( <lfs_value> ).
+            "ENDIF.
+        ENDTRY.
+
+      ENDLOOP.
+***************************************************************************************************
+"Budżet order może być nawet na 7 poziomie, więc logika: 
+"2 nowe kolumny:
+"Projekt zostaje w ProjectId - kolumna tylko na nr projektów (projekt powielony na każdą linię tabeli z jego hierrachii), 
+"WBS (1 poziom, a 2 poziom powielony dla wszystkich zamówień pod nim - zamówienia podlegają pod 2 poziom wbs), 
+"Wszystkie zamówienia
+"Na ten moment wszystkie kolumny zostają
+****************************************************************************************************
+******      ""MODIFIKATIONSBEREICH, neue Spalten
+******      IF lv_level > 0.
+******        DATA(lv_index_max) = lines( lt_hierarchy_wbs ).
+******        DO.
+******          IF lt_hierarchy_wbs[ lv_index_max ]-level < lv_level. "pomocnicza tab zeby znalezc poziom tab i cofamy sie do poziomu 0 czyli projektu
+*******            IF lv_temp_nadrzedny_element IS INITIAL. "TO MUSI BYC by nie nadpisywal koljeneho elemntu wiec jak znajdzie wyzej to ten ma wpisac i nie szukac dale, ale zadekl ybwst_str_budgetcntl
+******            "nadrzedny wbs, albo pole z nr hierarchii mozna dodac do struktury, a tuta ls_final-twojeNowePoleNadrzednyElement
+******            DATA(lv_temp_nadrzedny_element) = lt_hierarchy_wbs[ lv_index_max ]-object.
+******            "pozniej zapisac jako ls_final-twojeNowePoleNadrzednyElement
+*******            ENDIF.
+******            lv_index_max = lv_index_max - 1.
+******            "ls_final-twojeNowePoleNadrzednyElement = lt_hierarchy_wbs[ lv_index_max ]-object.
+******          ELSEIF lt_hierarchy_wbs[ lv_index_max ]-level = '0'.
+******            DATA(lv_temp_projekt) = lt_hierarchy_wbs[ lv_index_max ]-object.
+******            "ls_final-twojeNowePoleProjekt = lt_hierarchy_wbs[ lv_index_max ]-object.
+******            EXIT.
+******          ELSE.
+******            lv_index_max = lv_index_max - 1.
+******          ENDIF.
+******        ENDDO.
+******
+*******        ls_final-nadrzedny_element = lt_hierarchy_wbs[ lines(lt_hierarchy_wbs) ]-object.
+*******       data(lv_lines) = lines(lt_hierarchy_wbs).
+******
+******      ENDIF.
+*************************************************************************************************************
+
+
+      CALL FUNCTION 'CONVERSION_EXIT_ABPSN_INPUT'
+        EXPORTING
+          input  = ls_final-projekt_id
+        IMPORTING
+          output = ls_final-projekt_id.
+
+
+
+*      CALL FUNCTION 'CONV_UTIL_ADD_DATE_AND_TIME'
+*        EXPORTING
+*          input  = ls_final-datetimestamp
+*        IMPORTING
+*          output = ls_final-datetimestamp.
+
+      ls_final-datetimestamp = sy-datum && sy-uzeit.
+      ls_final-waers = 'EUR'.
+      ls_final-versn = lv_version.
+
+
+      APPEND ls_final TO lt_final_data.
+
+    ENDLOOP.
+
+
+    "Abrufen des Buchungskreises
+    SELECT pspid, vbukr FROM proj
+                        INTO TABLE @DATA(lt_bukrs_data)
+                        FOR ALL ENTRIES IN @lt_final_data
+                        WHERE pspid = @lt_final_data-projekt_id.
+
+    IF sy-subrc = 0.
+      SORT lt_bukrs_data BY pspid.
+    ENDIF.
+
+    LOOP AT lt_final_data ASSIGNING FIELD-SYMBOL(<lfs_final_line>).
+      READ TABLE lt_bukrs_data ASSIGNING FIELD-SYMBOL(<lfs_bukrs>) WITH KEY pspid = <lfs_final_line>-projekt_id BINARY SEARCH.
+      IF sy-subrc = 0.
+        <lfs_final_line>-pbukr_2 = <lfs_bukrs>-vbukr.
+      ENDIF.
+    ENDLOOP.
+
+
+*****************************************************************************************************************************************************************************************************
+
+
+
+  ELSE.
+* Data packeges for extractractor created:
+    IF lt_final_data IS INITIAL. "lt_final_data is being cleared when records are transfered, so when it's INITIAL is means all records were already transfered
+      "to the packeges
+      RAISE no_more_data.
+    ENDIF.
+
+
+*    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+*             WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4
+*             INTO lv_message.
+*    CONCATENATE sy-msgid sy-msgno sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4
+*         INTO lv_message SEPARATED BY space.
+
+
+
+    DATA(lv_records_amount) = 0.
+    LOOP AT lt_final_data ASSIGNING FIELD-SYMBOL(<lfs_final>).
+      lv_records_amount = lv_records_amount + 1.
+      IF lv_records_amount <= i_maxsize.
+        APPEND <lfs_final> TO e_t_data.
+        DELETE lt_final_data INDEX 1.
+      ELSE.
+        EXIT.
+      ENDIF.
+    ENDLOOP.
+
+
+  ENDIF.
+
+ENDFUNCTION.
