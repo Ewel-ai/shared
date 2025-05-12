@@ -227,48 +227,49 @@ ls_final-DATETIMESTAMP = ls_raw-DATETIMESTAMP.
 
 
  
-  
-  
-"-----------------------end  
 
 
-"      " Feste Offsets verwenden, um die Feldinhalte voneinander zu trennen:
-"      LOOP AT lt_splitted_data ASSIGNING FIELD-SYMBOL(<lfs_value>).
+*      " Feste Offsets verwenden, um die Feldinhalte voneinander zu trennen:
+*      LOOP AT lt_splitted_data ASSIGNING FIELD-SYMBOL(<lfs_value>).
+*
+*        ASSIGN COMPONENT sy-tabix OF STRUCTURE ls_final TO FIELD-SYMBOL(<lfs_structure_field>). "Mapping mit Struktur
+*
+*
+*        "Schreiben eines Wertes in ein Feld aus einer Struktur.
+*        "CONDENSE <lfs_value>. "NO-GAPS?
+*        SHIFT <lfs_value> LEFT DELETING LEADING space.
+*        TRY.
+*            "MODIFIKATIONSBEREICH: Datumskonvertierung
+*            DATA lv_type(1).
+*            DESCRIBE FIELD <lfs_structure_field> TYPE lv_type.
+*            CASE lv_type.
+*              WHEN 'D'.
+*                CALL FUNCTION 'CONVERSION_EXIT_SDATE_INPUT'
+*                  EXPORTING
+*                    input  = <lfs_value>
+*                  IMPORTING
+*                    output = <lfs_structure_field>.
+*              "MODIFIKATIONSBEREICH: Zahlen
+*              WHEN 'P'.
+*                REPLACE ALL OCCURRENCES OF '.' IN <lfs_value> WITH ''.
+*                REPLACE ALL OCCURRENCES OF ',' IN <lfs_value> WITH '.'.
+*                <lfs_structure_field> = CONV #( <lfs_value> ).
+*              WHEN OTHERS.
+*                <lfs_structure_field> = CONV #( <lfs_value> ).
+*            ENDCASE.
 
-"        ASSIGN COMPONENT sy-tabix OF STRUCTURE ls_final TO FIELD-SYMBOL(<lfs_structure_field>). "Mapping mit Struktur
 
+*            "Behebung von Fehlern, die durch Zahlen verursacht werden (Punkt, Komma)
+*          CATCH cx_sy_conversion_no_number.
+*            REPLACE ALL OCCURRENCES OF '.' IN <lfs_value> WITH ''.
+*            REPLACE ALL OCCURRENCES OF ',' IN <lfs_value> WITH '.'.
+*            <lfs_structure_field> = CONV #( <lfs_value> ).
+*
+*        ENDTRY.
+*
+*      ENDLOOP.
 
-"        "Schreiben eines Wertes in ein Feld aus einer Struktur.
-        "CONDENSE <lfs_value>. "NO-GAPS?
-"        SHIFT <lfs_value> LEFT DELETING LEADING space.
-"        TRY.
-            "MODIFIKATIONSBEREICH: Datumskonvertierung
-            DATA lv_type(1).
-"            DESCRIBE FIELD <lfs_structure_field> TYPE lv_type.
-            CASE lv_type.
-              WHEN 'D'.
-                CALL FUNCTION 'CONVERSION_EXIT_SDATE_INPUT'
-                  EXPORTING
-                    input  = <lfs_value>
-                  IMPORTING
-                    output = <lfs_structure_field>.
-              "MODIFIKATIONSBEREICH: Zahlen
-              WHEN 'P'.
-                REPLACE ALL OCCURRENCES OF '.' IN <lfs_value> WITH ''.
-                REPLACE ALL OCCURRENCES OF ',' IN <lfs_value> WITH '.'.
-                <lfs_structure_field> = CONV #( <lfs_value> ).
-              WHEN OTHERS.
-                <lfs_structure_field> = CONV #( <lfs_value> ).
-            ENDCASE.
-            "Behebung von Fehlern, die durch Zahlen verursacht werden (Punkt, Komma)
-          CATCH cx_sy_conversion_no_number.
-            REPLACE ALL OCCURRENCES OF '.' IN <lfs_value> WITH ''.
-            REPLACE ALL OCCURRENCES OF ',' IN <lfs_value> WITH '.'.
-            <lfs_structure_field> = CONV #( <lfs_value> ).
-
-        ENDTRY.
-
-      ENDLOOP.
+"-----------------------end 15.05.2025
 
       "MODIFIKATIONSBEREICH: Projekt
       CALL FUNCTION 'CONVERSION_EXIT_ABPSN_INPUT'
