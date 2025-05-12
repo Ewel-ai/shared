@@ -1,5 +1,4 @@
-FUNCTION y_bwst_ps_budgetcntl.
-
+FUNCTION y_bwst_ps_projitm.
 *"----------------------------------------------------------------------
 *"*"Local Interface:
 *"  IMPORTING
@@ -14,86 +13,107 @@ FUNCTION y_bwst_ps_budgetcntl.
 *"  TABLES
 *"      I_T_SELECT TYPE  SBIWA_T_SELECT OPTIONAL
 *"      I_T_FIELDS TYPE  SBIWA_T_FIELDS OPTIONAL
-*"      E_T_DATA STRUCTURE  YBWST_STR_BUDGETCNTL OPTIONAL
+*"      E_T_DATA STRUCTURE  YBWST_STR_PROJITM OPTIONAL
 *"  EXCEPTIONS
 *"      NO_MORE_DATA
 *"      ERROR_PASSED_TO_MESS_HANDLER
 *"----------------------------------------------------------------------
 
+
+
+
+******************************************************************************************************************************************************************************************************
+
   DATA: itab_list  TYPE TABLE OF abaplist,
         g_t_status LIKE syst,
-        lv_bukrs   TYPE ps_pbukr, "i, "płaska pojedyncza zmienna
+        "lr_bukrs   TYPE RANGE OF ps_pbukr, "nicht nötig, immer Buchungskreis 2333
         lr_pspid   TYPE RANGE OF ps_pspid,
         lr_posid   TYPE RANGE OF ps_posid,
         lr_aufnr   TYPE RANGE OF aufnr,
-        lv_version TYPE bp_versn,
-        ls_final   TYPE ybwst_str_budgetcntl,
-        "lt_final   TYPE STANDARD TABLE OF ybwst_str_budgetcntl,
-        lv_level   TYPE i,
+        ls_final   TYPE ybwst_str_projitm,    
         lv_message TYPE string.
-  "rspar      TYPE TABLE OF rsparams.
-*        lv_timestamp TYPE string. "LADINGDATUM
-
-  TYPES: BEGIN OF lty_hierarchy_wbs,
-           object TYPE char24,
-           level  TYPE i,
-         END OF lty_hierarchy_wbs.
-
-  DATA: lt_hierarchy_wbs TYPE TABLE OF lty_hierarchy_wbs.
 
 
-  STATICS: lt_final_data TYPE TABLE OF ybwst_str_budgetcntl. "Static variable used to remember selected data with every execution
+  STATICS: lt_final_data TYPE TABLE OF ybwst_str_projitm.
+
+"----------------------------------------12.05.2025
+*Create a temporary CHAR-based structure to split ASCII lines
+TYPES: BEGIN OF ty_split_raw,
+PSPID_4 TYPE c LENGTH 24,
+POST1_5 TYPE c LENGTH 40,
+POSID_6 TYPE c LENGTH 24,
+POST1_7 TYPE c LENGTH 40,
+AUFNR_1_8 TYPE c LENGTH 12,
+AUFNR_2_9 TYPE c LENGTH 12,
+BANFN_10 TYPE c LENGTH 10,
+BNFPO_11 TYPE c LENGTH 5,
+EBELN_13 TYPE c LENGTH 10,
+EBELP_14 TYPE c LENGTH 5,
+AFNAM_17 TYPE c LENGTH 12,
+BADAT_18 TYPE c LENGTH 8,
+BEDAT_19 TYPE c LENGTH 8,
+TEXT_20 TYPE c LENGTH 40,
+NAME1_21 TYPE c LENGTH 35,
+VPROZ_22 TYPE c LENGTH 3,
+USER4_23 TYPE c LENGTH 11,
+PR_WERTV8_25 TYPE c LENGTH 15,
+PO_WERTV8_24 TYPE c LENGTH 15,
+PR_WHGBTR_26 TYPE c LENGTH 15,
+PO_WHGBTR_27 TYPE c LENGTH 15,
+ACT_WKGBTR_28 TYPE c LENGTH 15,
+EXE_WERTV8_29 TYPE c LENGTH 15,
+DP_WKGBTR_30 TYPE c LENGTH 15,
+YST_INFO1 TYPE c LENGTH 25,
+YST_KENNZ_ORD TYPE c LENGTH 30,
+YST_ORDBUD TYPE c LENGTH 11,
+WAERS TYPE c LENGTH 5,
+PBUKR_2 TYPE c LENGTH 4,
+DATETIMESTAMP TYPE c LENGTH 15,
+       END OF ty_split_raw.
+       
+       
+       
+DATA: lt_ascii_lines  TYPE STANDARD TABLE OF string, "12.05.2025
+      lv_line         TYPE string, "12.05.2025
+      ls_raw          TYPE ty_split_raw. "12.05.2025
+"------------------------------------------end
 
   "Datenaufbereitung und Datenformatierung, Ausführung des Extraktors
   IF i_initflag = abap_true.
-
 
     "Parametern für die Auswahl, zum Selektionsbild des Programms übergehen
     LOOP AT i_t_select[] INTO DATA(ls_selection).
 
       CASE ls_selection-fieldnm.
-        WHEN 'PBUKR_2'.
-          lv_bukrs = ls_selection-low.  "EQ p_pbukr.
 
-*        WHEN 'POSID_6'.
-*          APPEND VALUE #( sign = ls_selection-sign
-*                          option = ls_selection-option
-*                          low = ls_selection-low
-*                          high = ls_selection-high ) TO lr_posid.
-        WHEN 'PROJEKT_ID'.
+        WHEN 'POSID_6'.
+          APPEND VALUE #( sign = ls_selection-sign
+                          option = ls_selection-option
+                          low = ls_selection-low
+                          high = ls_selection-high ) TO lr_posid.
+        WHEN 'PSPID_4'.
           APPEND VALUE #( sign = ls_selection-sign
                           option = ls_selection-option
                           low = ls_selection-low
                           high = ls_selection-high ) TO lr_pspid.
 
-*        WHEN 'AUFNR_1_8'.
-*          APPEND VALUE #( sign = ls_selection-sign
-*                          option = ls_selection-option
-*                          low = ls_selection-low
-*                          high = ls_selection-high ) TO lr_aufnr.
-*        WHEN 'YEAR_CALC'.
-*          APPEND VALUE #( sign = ls_selection-sign
-*                          option = ls_selection-option
-*                          low = ls_selection-low
-*                          high = ls_selection-high ) TO lr_year_calc.
-        WHEN 'VERSION'.
-          lv_version = ls_selection-low.
+        WHEN 'AUFNR_1_8'.
+          APPEND VALUE #( sign = ls_selection-sign
+                          option = ls_selection-option
+                          low = ls_selection-low
+                          high = ls_selection-high ) TO lr_aufnr.
 
       ENDCASE.
-
-
 
     ENDLOOP.
 
 
 **************************************************************************************************************************************************************************************
-    SUBMIT ypsst_budgetcontrol  WITH p_pbukr EQ lv_bukrs  "EQ '2333'"in lr_bukrs
-                               WITH s_pspid IN lr_pspid "EQ 'J8II-004712'
-                              " WITH s_posid IN lr_posid "WBS
-                              " WITH s_aufnr IN lr_aufnr
-                               WITH p_versn EQ lv_version    "EQ '000'
-                               WITH p_layout = '/STANDARD'  "layout variant
-                               WITH p_list EQ 'X'
+    SUBMIT ypsst_projectitems  WITH s_pbukr EQ '2333' 
+                               WITH s_pspid IN lr_pspid 
+                               WITH s_posid IN lr_posid 
+                               WITH s_aufnr IN lr_aufnr
+                               WITH p_layout = '/BWEXTRACTOR'  
                                EXPORTING LIST TO MEMORY
                                AND RETURN.
 
@@ -122,151 +142,181 @@ FUNCTION y_bwst_ps_budgetcntl.
       TABLES
         listobject        = itab_list.
 
+
     DELETE lt_ascii INDEX lines( lt_ascii ).
 
 
     "FIELD-SYMBOL zeigt auf eine Tabellenzeile
     LOOP AT lt_ascii ASSIGNING FIELD-SYMBOL(<lfs_ascii>) FROM 4. "ab Zeile 4 starten, um die Listenüberschrift wegzulassen
+*      SPLIT <lfs_ascii>+1 AT '|' INTO TABLE DATA(lt_splitted_data). "teilen die Zeile nach dem '|'-Zeichen in Spalten auf, dann schreiben die einzelnen SPALTEN in die WÄHLER der Tabelle
+ 
 
-      SPLIT <lfs_ascii>+1 AT '|' INTO TABLE DATA(lt_splitted_data). "teilen die Zeile nach dem '|'-Zeichen in Spalten auf, dann schreiben die einzelnen SPALTEN in die WÄHLER der Tabelle
-      "Löschen die ersten 3 unnötigen Zeilen
-      DELETE lt_splitted_data FROM 1 TO 3.
+  "-----------------------------------12.05.2025
+    " Skip short or non-data lines (adjust logic if needed)
+  IF strlen( lv_line ) < 500.
+    CONTINUE.
+  ENDIF.
 
-      LOOP AT lt_splitted_data ASSIGNING FIELD-SYMBOL(<lfs_value>).
-        DATA(lv_column_index) = sy-tabix.
+  CLEAR: ls_raw, ls_final.
 
-        "logika splaszczenia hierarchii - potwierdzic z Marcelem
-        " IF lv_column_index = '4'. "przed wywaleniem 3 pierwszych kolumn
-        IF lv_column_index = '1'.
-          "pętla DO by spłaszczeć hierarchię
-          "Project:              gv_pspid  TYPE proj-pspid,
-          "WBS-element z hierarchią:         gv_posid  TYPE prps-posid,
-          "Order:                          gv_aufnr  TYPE aufk-aufnr,
-          lv_level = 0.
-          DO.
-            IF <lfs_value>(1) = '.'.
-              lv_level = lv_level + 1.
-              <lfs_value> = <lfs_value>+1.
-            ELSE.
-              APPEND VALUE #( object = <lfs_value> level = lv_level ) TO lt_hierarchy_wbs.
-              EXIT.
-            ENDIF.
-          ENDDO.
+  " Split based on fixed offsets
+ ls_raw-PSPID_4 = lv_line+4(24).
+ls_raw-POST1_5 = lv_line+28(40).
+ls_raw-POSID_6 = lv_line+68(24).
+ls_raw-POST1_7 = lv_line+92(40).
+ls_raw-AUFNR_1_8 = lv_line+132(12).
+ls_raw-AUFNR_2_9 = lv_line+144(12).
+ls_raw-BANFN_10 = lv_line+156(10).
+ls_raw-BNFPO_11 = lv_line+166(5).
+ls_raw-EBELN_13 = lv_line+171(10).
+ls_raw-EBELP_14 = lv_line+181(5).
+ls_raw-AFNAM_17 = lv_line+186(12).
+ls_raw-BADAT_18 = lv_line+198(8).
+ls_raw-BEDAT_19 = lv_line+206(8).
+ls_raw-TEXT_20 = lv_line+214(40).
+ls_raw-NAME1_21 = lv_line+254(35).
+ls_raw-VPROZ_22 = lv_line+289(3).
+ls_raw-USER4_23 = lv_line+292(11).
+ls_raw-PR_WERTV8_25 = lv_line+303(15).
+ls_raw-PO_WERTV8_24 = lv_line+318(15).
+ls_raw-PR_WHGBTR_26 = lv_line+333(15).
+ls_raw-PO_WHGBTR_27 = lv_line+348(15).
+ls_raw-ACT_WKGBTR_28 = lv_line+363(15).
+ls_raw-EXE_WERTV8_29 = lv_line+378(15).
+ls_raw-DP_WKGBTR_30 = lv_line+393(15).
+ls_raw-YST_INFO1 = lv_line+408(25).
+ls_raw-YST_KENNZ_ORD = lv_line+433(30).
+ls_raw-YST_ORDBUD = lv_line+463(11).
+ls_raw-WAERS = lv_line+474(5).
+ls_raw-PBUKR_2 = lv_line+479(4).
+ls_raw-DATETIMESTAMP = lv_line+483(15).
+ 
+ 
+   " Convert CHAR to real types (your_final_structure fields must match)
+ls_final-PSPID_4 = ls_raw-PSPID_4.
+ls_final-POST1_5 = ls_raw-POST1_5.
+ls_final-POSID_6 = ls_raw-POSID_6.
+ls_final-POST1_7 = ls_raw-POST1_7.
+ls_final-AUFNR_1_8 = ls_raw-AUFNR_1_8.
+ls_final-AUFNR_2_9 = ls_raw-AUFNR_2_9.
+ls_final-BANFN_10 = ls_raw-BANFN_10.
+ls_final-BNFPO_11 = ls_raw-BNFPO_11.
+ls_final-EBELN_13 = ls_raw-EBELN_13.
+ls_final-EBELP_14 = ls_raw-EBELP_14.
+ls_final-AFNAM_17 = ls_raw-AFNAM_17.
+ls_final-BADAT_18 = ls_raw-BADAT_18.
+ls_final-BEDAT_19 = ls_raw-BEDAT_19.
+ls_final-TEXT_20 = ls_raw-TEXT_20.
+ls_final-NAME1_21 = ls_raw-NAME1_21.
+ls_final-VPROZ_22 = ls_raw-VPROZ_22.
+ls_final-USER4_23 = ls_raw-USER4_23.
+ls_final-PR_WERTV8_25 = ls_raw-PR_WERTV8_25.
+ls_final-PO_WERTV8_24 = ls_raw-PO_WERTV8_24.
+ls_final-PR_WHGBTR_26 = ls_raw-PR_WHGBTR_26.
+ls_final-PO_WHGBTR_27 = ls_raw-PO_WHGBTR_27.
+ls_final-ACT_WKGBTR_28 = ls_raw-ACT_WKGBTR_28.
+ls_final-EXE_WERTV8_29 = ls_raw-EXE_WERTV8_29.
+ls_final-DP_WKGBTR_30 = ls_raw-DP_WKGBTR_30.
+ls_final-YST_INFO1 = ls_raw-YST_INFO1.
+ls_final-YST_KENNZ_ORD = ls_raw-YST_KENNZ_ORD.
+ls_final-YST_ORDBUD = ls_raw-YST_ORDBUD.
+ls_final-WAERS = ls_raw-WAERS.
+ls_final-PBUKR_2 = ls_raw-PBUKR_2.
+ls_final-DATETIMESTAMP = ls_raw-DATETIMESTAMP.
 
-        ENDIF.
 
 
-        ASSIGN COMPONENT lv_column_index OF STRUCTURE ls_final TO FIELD-SYMBOL(<lfs_structure_field>). "Mapping mit Struktur
+ 
+  
+  
+"-----------------------end  
 
-        "Schreiben eines Wertes in ein Feld aus einer Struktur. Behebung von Fehlern, die durch Zahlen verursacht werden (Punkt, Komma)
-        CONDENSE <lfs_value>. "NO-GAPS?
-        TRY.
-            <lfs_structure_field> = CONV #( <lfs_value> ).
+
+"      " Feste Offsets verwenden, um die Feldinhalte voneinander zu trennen:
+"      LOOP AT lt_splitted_data ASSIGNING FIELD-SYMBOL(<lfs_value>).
+
+"        ASSIGN COMPONENT sy-tabix OF STRUCTURE ls_final TO FIELD-SYMBOL(<lfs_structure_field>). "Mapping mit Struktur
+
+
+"        "Schreiben eines Wertes in ein Feld aus einer Struktur.
+        "CONDENSE <lfs_value>. "NO-GAPS?
+"        SHIFT <lfs_value> LEFT DELETING LEADING space.
+"        TRY.
+            "MODIFIKATIONSBEREICH: Datumskonvertierung
+            DATA lv_type(1).
+"            DESCRIBE FIELD <lfs_structure_field> TYPE lv_type.
+            CASE lv_type.
+              WHEN 'D'.
+                CALL FUNCTION 'CONVERSION_EXIT_SDATE_INPUT'
+                  EXPORTING
+                    input  = <lfs_value>
+                  IMPORTING
+                    output = <lfs_structure_field>.
+              "MODIFIKATIONSBEREICH: Zahlen
+              WHEN 'P'.
+                REPLACE ALL OCCURRENCES OF '.' IN <lfs_value> WITH ''.
+                REPLACE ALL OCCURRENCES OF ',' IN <lfs_value> WITH '.'.
+                <lfs_structure_field> = CONV #( <lfs_value> ).
+              WHEN OTHERS.
+                <lfs_structure_field> = CONV #( <lfs_value> ).
+            ENDCASE.
+            "Behebung von Fehlern, die durch Zahlen verursacht werden (Punkt, Komma)
           CATCH cx_sy_conversion_no_number.
             REPLACE ALL OCCURRENCES OF '.' IN <lfs_value> WITH ''.
             REPLACE ALL OCCURRENCES OF ',' IN <lfs_value> WITH '.'.
-            "IF sy-subrc = 0.
             <lfs_structure_field> = CONV #( <lfs_value> ).
-            "ENDIF.
+
         ENDTRY.
 
       ENDLOOP.
-***************************************************************************************************
-"Budżet order może być nawet na 7 poziomie, więc logika: 
-"2 nowe kolumny:
-"Projekt zostaje w ProjectId - kolumna tylko na nr projektów (projekt powielony na każdą linię tabeli z jego hierrachii), 
-"WBS (1 poziom, a 2 poziom powielony dla wszystkich zamówień pod nim - zamówienia podlegają pod 2 poziom wbs), 
-"Wszystkie zamówienia
-"czyli powielenie Projektów i WBS dla wszystkich zamówień, ale tam gdzie nie ma zamówień, to są "globalne wartości" na projekt czy WBS, więc też muszą zsotać
-"Na ten moment wszystkie kolumny wartościowe też zostają
-****************************************************************************************************
-******      ""MODIFIKATIONSBEREICH, neue Spalten
-******      IF lv_level > 0.
-******        DATA(lv_index_max) = lines( lt_hierarchy_wbs ).
-******        DO.
-******          IF lt_hierarchy_wbs[ lv_index_max ]-level < lv_level. "pomocnicza tab zeby znalezc poziom tab i cofamy sie do poziomu 0 czyli projektu
-*******            IF lv_temp_nadrzedny_element IS INITIAL. "TO MUSI BYC by nie nadpisywal koljeneho elemntu wiec jak znajdzie wyzej to ten ma wpisac i nie szukac dale, ale zadekl ybwst_str_budgetcntl
-******            "nadrzedny wbs, albo pole z nr hierarchii mozna dodac do struktury, a tuta ls_final-twojeNowePoleNadrzednyElement
-******            DATA(lv_temp_nadrzedny_element) = lt_hierarchy_wbs[ lv_index_max ]-object.
-******            "pozniej zapisac jako ls_final-twojeNowePoleNadrzednyElement
-*******            ENDIF.
-******            lv_index_max = lv_index_max - 1.
-******            "ls_final-twojeNowePoleNadrzednyElement = lt_hierarchy_wbs[ lv_index_max ]-object.
-******          ELSEIF lt_hierarchy_wbs[ lv_index_max ]-level = '0'.
-******            DATA(lv_temp_projekt) = lt_hierarchy_wbs[ lv_index_max ]-object.
-******            "ls_final-twojeNowePoleProjekt = lt_hierarchy_wbs[ lv_index_max ]-object.
-******            EXIT.
-******          ELSE.
-******            lv_index_max = lv_index_max - 1.
-******          ENDIF.
-******        ENDDO.
-******
-*******        ls_final-nadrzedny_element = lt_hierarchy_wbs[ lines(lt_hierarchy_wbs) ]-object.
-*******       data(lv_lines) = lines(lt_hierarchy_wbs).
-******
-******      ENDIF.
-*************************************************************************************************************
 
-
+      "MODIFIKATIONSBEREICH: Projekt
       CALL FUNCTION 'CONVERSION_EXIT_ABPSN_INPUT'
         EXPORTING
-          input  = ls_final-projekt_id
+          input  = ls_final-pspid_4
         IMPORTING
-          output = ls_final-projekt_id.
+          output = ls_final-pspid_4.
 
+*      " * Datum
+*      DATA lv_type(1).
+*      DESCRIBE FIELD <lfs_structure_field> TYPE lv_type.
+*      CASE lv_type.
+*        WHEN 'D'.
+*          CALL FUNCTION 'CONVERSION_EXIT_SDATE_INPUT'
+*            EXPORTING
+*              input  = <lfs_value>
+*            IMPORTING
+*              output = <lfs_structure_field>.
+*      ENDCASE.
 
-
-*      CALL FUNCTION 'CONV_UTIL_ADD_DATE_AND_TIME'
+*      CALL FUNCTION 'CONVERSION_EXIT_SDATE_INPUT'
 *        EXPORTING
-*          input  = ls_final-datetimestamp
+*          input  = ls_final-badat_18
 *        IMPORTING
-*          output = ls_final-datetimestamp.
+*          output = ls_final-badat_18.
+*
+*      CALL FUNCTION 'CONVERSION_EXIT_SDATE_INPUT'
+*        EXPORTING
+*          input  = ls_final-bedat_19
+*        IMPORTING
+*          output = ls_final-bedat_19.
 
-      ls_final-datetimestamp = sy-datum && sy-uzeit.
+      "immer nur EUR und 2333
       ls_final-waers = 'EUR'.
-      ls_final-versn = lv_version.
-
+      ls_final-pbukr_2 = '2333'.
+      ls_final-datetimestamp = sy-datum && sy-uzeit.
 
       APPEND ls_final TO lt_final_data.
 
     ENDLOOP.
 
 
-    "Abrufen des Buchungskreises
-    SELECT pspid, vbukr FROM proj
-                        INTO TABLE @DATA(lt_bukrs_data)
-                        FOR ALL ENTRIES IN @lt_final_data
-                        WHERE pspid = @lt_final_data-projekt_id.
-
-    IF sy-subrc = 0.
-      SORT lt_bukrs_data BY pspid.
-    ENDIF.
-
-    LOOP AT lt_final_data ASSIGNING FIELD-SYMBOL(<lfs_final_line>).
-      READ TABLE lt_bukrs_data ASSIGNING FIELD-SYMBOL(<lfs_bukrs>) WITH KEY pspid = <lfs_final_line>-projekt_id BINARY SEARCH.
-      IF sy-subrc = 0.
-        <lfs_final_line>-pbukr_2 = <lfs_bukrs>-vbukr.
-      ENDIF.
-    ENDLOOP.
-
-
-*****************************************************************************************************************************************************************************************************
-
-
-
   ELSE.
-* Data packeges for extractractor created:
-    IF lt_final_data IS INITIAL. "lt_final_data is being cleared when records are transfered, so when it's INITIAL is means all records were already transfered
-      "to the packeges
+
+    IF lt_final_data IS INITIAL.
+
       RAISE no_more_data.
     ENDIF.
-
-
-*    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
-*             WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4
-*             INTO lv_message.
-*    CONCATENATE sy-msgid sy-msgno sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4
-*         INTO lv_message SEPARATED BY space.
 
 
 
