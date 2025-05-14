@@ -26,11 +26,11 @@ FUNCTION y_bwst_ps_projitm.
 
   DATA: itab_list  TYPE TABLE OF abaplist,
         g_t_status LIKE syst,
-        "lr_bukrs   TYPE RANGE OF ps_pbukr, "nicht nötig, immer Buchungskreis 2333
+        
         lr_pspid   TYPE RANGE OF ps_pspid,
         lr_posid   TYPE RANGE OF ps_posid,
         lr_aufnr   TYPE RANGE OF aufnr,
-        ls_final   TYPE ybwst_str_projitm,    
+        ls_final   TYPE ybwst_str_projitm,
         lv_message TYPE string.
 
 
@@ -70,11 +70,10 @@ WAERS TYPE c LENGTH 5,
 PBUKR_2 TYPE c LENGTH 4,
 DATETIMESTAMP TYPE c LENGTH 15,
        END OF ty_split_raw.
-       
-       
-       
+
+
+
 DATA: lt_ascii_lines  TYPE STANDARD TABLE OF string, "12.05.2025
-      lv_line         TYPE string, "12.05.2025
       ls_raw          TYPE ty_split_raw. "12.05.2025
 "------------------------------------------end
 
@@ -85,7 +84,11 @@ DATA: lt_ascii_lines  TYPE STANDARD TABLE OF string, "12.05.2025
     LOOP AT i_t_select[] INTO DATA(ls_selection).
 
       CASE ls_selection-fieldnm.
-
+*        WHEN 'PBUKR_2'.
+*          APPEND VALUE #( sign = ls_selection-sign
+*                          option = ls_selection-option
+*                          low = ls_selection-low
+*                          high = ls_selection-high ) TO lr_bukrs.
         WHEN 'POSID_6'.
           APPEND VALUE #( sign = ls_selection-sign
                           option = ls_selection-option
@@ -146,52 +149,50 @@ DATA: lt_ascii_lines  TYPE STANDARD TABLE OF string, "12.05.2025
     DELETE lt_ascii INDEX lines( lt_ascii ).
 
 
-    "FIELD-SYMBOL zeigt auf eine Tabellenzeile
-    LOOP AT lt_ascii ASSIGNING FIELD-SYMBOL(<lfs_ascii>) FROM 4. "ab Zeile 4 starten, um die Listenüberschrift wegzulassen
-*      SPLIT <lfs_ascii>+1 AT '|' INTO TABLE DATA(lt_splitted_data). "teilen die Zeile nach dem '|'-Zeichen in Spalten auf, dann schreiben die einzelnen SPALTEN in die WÄHLER der Tabelle
- 
 
   "-----------------------------------12.05.2025
-    " Skip short or non-data lines (adjust logic if needed)
-  IF strlen( lv_line ) < 500.
-    CONTINUE.
-  ENDIF.
+    "FIELD-SYMBOL zeigt auf eine Tabellenzeile
+*    LOOP AT lt_ascii ASSIGNING FIELD-SYMBOL(<lfs_ascii>) FROM 4. "ab Zeile 4 starten, um die Listenüberschrift wegzulassen
+*      SPLIT <<lfs_ascii>>+1 AT '|' INTO TABLE DATA(lt_splitted_data). "teilen die Zeile nach dem '|'-Zeichen in Spalten auf, dann schreiben die einzelnen SPALTEN in die WÄHLER der Tabelle
 
-  CLEAR: ls_raw, ls_final.
+
+*    " Skip short or non-data lines (adjust logic if needed)
+*  IF strlen( <lfs_ascii> ) < 460.
+*    CONTINUE.
+*  ENDIF.
+
+LOOP AT lt_ascii into data(ls_ascii) FROM 4.
 
   " Split based on fixed offsets
- ls_raw-PSPID_4 = lv_line+4(24).
-ls_raw-POST1_5 = lv_line+28(40).
-ls_raw-POSID_6 = lv_line+68(24).
-ls_raw-POST1_7 = lv_line+92(40).
-ls_raw-AUFNR_1_8 = lv_line+132(12).
-ls_raw-AUFNR_2_9 = lv_line+144(12).
-ls_raw-BANFN_10 = lv_line+156(10).
-ls_raw-BNFPO_11 = lv_line+166(5).
-ls_raw-EBELN_13 = lv_line+171(10).
-ls_raw-EBELP_14 = lv_line+181(5).
-ls_raw-AFNAM_17 = lv_line+186(12).
-ls_raw-BADAT_18 = lv_line+198(8).
-ls_raw-BEDAT_19 = lv_line+206(8).
-ls_raw-TEXT_20 = lv_line+214(40).
-ls_raw-NAME1_21 = lv_line+254(35).
-ls_raw-VPROZ_22 = lv_line+289(3).
-ls_raw-USER4_23 = lv_line+292(11).
-ls_raw-PR_WERTV8_25 = lv_line+303(15).
-ls_raw-PO_WERTV8_24 = lv_line+318(15).
-ls_raw-PR_WHGBTR_26 = lv_line+333(15).
-ls_raw-PO_WHGBTR_27 = lv_line+348(15).
-ls_raw-ACT_WKGBTR_28 = lv_line+363(15).
-ls_raw-EXE_WERTV8_29 = lv_line+378(15).
-ls_raw-DP_WKGBTR_30 = lv_line+393(15).
-ls_raw-YST_INFO1 = lv_line+408(25).
-ls_raw-YST_KENNZ_ORD = lv_line+433(30).
-ls_raw-YST_ORDBUD = lv_line+463(11).
-ls_raw-WAERS = lv_line+474(5).
-ls_raw-PBUKR_2 = lv_line+479(4).
-ls_raw-DATETIMESTAMP = lv_line+483(15).
- 
- 
+ls_raw-PSPID_4 = ls_ascii+1(24).
+ls_raw-POST1_5 = ls_ascii+25(40).
+ls_raw-POSID_6 = ls_ascii+66(24).
+ls_raw-POST1_7 = ls_ascii+91(40).
+ls_raw-AUFNR_1_8 = ls_ascii+132(12).
+ls_raw-AUFNR_2_9 = ls_ascii+145(12).
+ls_raw-BANFN_10 = ls_ascii+158(10).
+ls_raw-BNFPO_11 = ls_ascii+169(5).
+ls_raw-EBELN_13 = ls_ascii+175(10).
+ls_raw-EBELP_14 = ls_ascii+186(5).
+ls_raw-AFNAM_17 = ls_ascii+192(12).
+ls_raw-BADAT_18 = ls_ascii+205(8).
+ls_raw-BEDAT_19 = ls_ascii+214(8).
+ls_raw-TEXT_20 = ls_ascii+223(40).
+ls_raw-NAME1_21 = ls_ascii+264(35).
+ls_raw-VPROZ_22 = ls_ascii+300(3).
+ls_raw-USER4_23 = ls_ascii+304(11).
+ls_raw-PR_WERTV8_25 = ls_ascii+316(15).
+ls_raw-PO_WERTV8_24 = ls_ascii+332(15).
+ls_raw-PR_WHGBTR_26 = ls_ascii+348(15).
+ls_raw-PO_WHGBTR_27 = ls_ascii+364(15).
+ls_raw-ACT_WKGBTR_28 = ls_ascii+380(15).
+ls_raw-EXE_WERTV8_29 = ls_ascii+396(15).
+ls_raw-DP_WKGBTR_30 = ls_ascii+412(15).
+ls_raw-YST_INFO1 = ls_ascii+428(25).
+ls_raw-YST_KENNZ_ORD = ls_ascii+454(30).
+ls_raw-YST_ORDBUD = ls_ascii+485(11).
+
+
    " Convert CHAR to real types (your_final_structure fields must match)
 ls_final-PSPID_4 = ls_raw-PSPID_4.
 ls_final-POST1_5 = ls_raw-POST1_5.
@@ -220,13 +221,12 @@ ls_final-DP_WKGBTR_30 = ls_raw-DP_WKGBTR_30.
 ls_final-YST_INFO1 = ls_raw-YST_INFO1.
 ls_final-YST_KENNZ_ORD = ls_raw-YST_KENNZ_ORD.
 ls_final-YST_ORDBUD = ls_raw-YST_ORDBUD.
-ls_final-WAERS = ls_raw-WAERS.
-ls_final-PBUKR_2 = ls_raw-PBUKR_2.
-ls_final-DATETIMESTAMP = ls_raw-DATETIMESTAMP.
 
 
 
- 
+
+
+
 
 
 *      " Feste Offsets verwenden, um die Feldinhalte voneinander zu trennen:
@@ -269,7 +269,7 @@ ls_final-DATETIMESTAMP = ls_raw-DATETIMESTAMP.
 *
 *      ENDLOOP.
 
-"-----------------------end 15.05.2025
+"-----------------------end
 
       "MODIFIKATIONSBEREICH: Projekt
       CALL FUNCTION 'CONVERSION_EXIT_ABPSN_INPUT'
@@ -302,7 +302,7 @@ ls_final-DATETIMESTAMP = ls_raw-DATETIMESTAMP.
 *        IMPORTING
 *          output = ls_final-bedat_19.
 
-      "immer nur EUR und 2333
+      
       ls_final-waers = 'EUR'.
       ls_final-pbukr_2 = '2333'.
       ls_final-datetimestamp = sy-datum && sy-uzeit.
@@ -335,4 +335,60 @@ ls_final-DATETIMESTAMP = ls_raw-DATETIMESTAMP.
 
   ENDIF.
 
-ENDFUNCTION.
+ENDFUNCTION. 
+
+
+
+
+
+
+
+---------------------------------------------------------------------------------------- program na dynamiczne wyłuskiwanie pól z nagłówka ---------------------------------------------------------------------------------------
+
+
+*&---------------------------------------------------------------------*
+*& Report YPSST_10200044_1
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT ypsst_10200044_1.
+
+DATA lv_header(255) VALUE '|Projekt    |Projektbezeichnung   |PSP-Element       |PSP Bezeichnung                         |Hauptauftrag|Auftrag     |BANF   |'.
+DATA lv_data(255) VALUE '|J8II-110099|Test Invest fuer AnBu|J8II-110099-I-S001|Selbst erstellte Software Hochofen 3    |400000197152|400000197152|xyz'.
+
+DATA lv_offset TYPE i.
+DATA lv_last_offset TYPE i.
+DATA lv_length TYPE i.
+
+DATA: lt_length TYPE STANDARD TABLE OF i.
+
+START-OF-SELECTION.
+
+  " Determin offset of all separation character in header line.
+  FIND ALL OCCURRENCES OF '|' IN lv_header RESULTS DATA(lt_results).
+
+  " We don't need the first entry.
+  DELETE lt_results INDEX 1.
+
+  lv_offset = 1. "First character is |, so we start at offset 1.
+
+  LOOP AT lt_results ASSIGNING FIELD-SYMBOL(<ls_result>).
+    " calculate the length of the data cell without the separator character:
+    "   Offset last data cell - offset actual data cell - 1.
+    lv_length = <ls_result>-offset - lv_last_offset - 1.
+
+    " make something with the content.
+    WRITE:
+      lv_data+lv_offset(lv_length)
+         , ','.
+
+    " calculate the starting point of the next data cell.
+    lv_offset = <ls_result>-offset + 1.
+    " remember the
+    lv_last_offset = <ls_result>-offset.
+
+  ENDLOOP.
+
+
+
+
